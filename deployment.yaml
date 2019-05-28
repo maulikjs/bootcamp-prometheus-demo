@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: test-metrics
+
+parameters:
+
+  - name: NAMESPACE
+    description: The OpenShift project in use
+    value: dh-prod-monitoring
+
+objects:
+  - apiVersion: image.openshift.io/v1
+    kind: ImageStream
+    metadata:
+      labels:
+        template: test-metrics
+        build: test-metrics
+      name: test-metrics
+      namespace: ${NAMESPACE}
+    spec:
+      lookupPolicy:
+        local: false
+
+  - apiVersion: build.openshift.io/v1
+    kind: BuildConfig
+    metadata:
+      name: test-metrics
+      namespace: ${NAMESPACE}
+      labels:
+        template: test-metrics
+    spec:
+      output:
+        to:
+          kind: ImageStreamTag
+          name: test-metrics:latest
+      source:
+        git:
+          uri: "https://github.com/maulikjs/bootcamp-prometheus-demo.git"
+          ref: "master"
+        type: Git
+      strategy:
+        sourceStrategy:
+          env:
+          - name: APP_SCRIPT
+            value: deploy.sh
+          - name: GIT_SSL_NO_VERIFY
+            value: 'false'
+          from:
+            kind: DockerImage
+            name: centos/python-36-centos7
+          forcePull: true
+        type: Source
+      triggers:
+        - type: ConfigChange
+
+
+  - apiVersion: v1
+    kind: DeploymentConfig
+    metadata:
+      labels:
+        template: test-metrics
+        app: test-metrics
+      name: test-metrics
+      namespace: ${NAMESPACE}
+    spec:
+      replicas: 1
+      strategy:
+        type: Rolling
+      template:
+        metadata:
+          labels:
+            app: test-metrics
+        spec:
+          containers:
+          - name: test-metrics
+          restartPolicy: Always
+      triggers:
+        - type: ConfigChange
+        - type: ImageChange
+          imageChangeParams:
+            automatic: true
+            containerNames:
+              - test-metrics
+            from:
+              kind: ImageStreamTag
+              name: test-metrics:latest
